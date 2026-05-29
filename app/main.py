@@ -19,13 +19,12 @@ CHECK_REQUESTS_LOG = Path(os.getenv("CHECK_REQUESTS_LOG", "artifacts/check_reque
 request_store = CheckRequestStore(CHECK_REQUESTS_LOG)
 
 _SYNTHETIC_TRAIN = Path("data/train/synthetic_train.json")
-_ORG_TRAIN = Path("data/train/orgs_train.json")
 _ORIG_TRAIN = Path("artifacts/train.json")
 
 
 def _load_streaming_classifier() -> StreamingClassifier:
     convs: list[Conversation] = []
-    for path in (_SYNTHETIC_TRAIN, _ORIG_TRAIN, _ORG_TRAIN):
+    for path in (_SYNTHETIC_TRAIN, _ORIG_TRAIN):
         if path.exists():
             convs += [Conversation.from_dict(d) for d in json.loads(path.read_text(encoding="utf-8"))]
     clf = StreamingClassifier()
