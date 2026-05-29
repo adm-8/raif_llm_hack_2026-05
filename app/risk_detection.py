@@ -1,17 +1,20 @@
+# ruff: noqa: RUF002
 """Real risk detection wired into ``check_dialogue`` without touching ``check.py``.
 
 ``check.py`` calls ``app.models.process_risk_detection(llm_client, raw_text)``.
 That function delegates here, so all behaviour changes live in this file.
 
-Pipeline
---------
-1. Parse the formatted ``raw_text`` ("role: content" per line) back into a
-   :class:`~app.models.Conversation`.
-2. Run the :class:`~app.streaming_classifier.StreamingClassifier` (trained once
-   at first use from ``artifacts/train.json`` plus the phrase lexicon in
-   ``artifacts/phrases.json``). It walks the dialogue message-by-message and
-   commits the whole-conversation verdict.
-3. Return ``{"category": ...}`` for a red flag, or ``None`` for "clear".
+Detector selection
+------------------
+Модуль поддерживает два режима, переключаемых константой ``DETECTOR_TYPE``:
+
+* ``"llm"`` (по умолчанию) — делегирует в :func:`app.llm_classifier.run_llm_detection`,
+  который оборачивает диалог в промпт и вызывает OpenRouter.
+* ``"streaming"`` — использует офлайн :class:`~app.streaming_classifier.StreamingClassifier`,
+  обучаемый один раз из ``artifacts/train.json`` плюс лексикон ``artifacts/phrases.json``.
+
+Чтобы переключиться, поменяйте значение ``DETECTOR_TYPE`` в этом файле.
+В обоих режимах возвращается ``{"category": ...}`` для red flag или ``None`` для ``clear``.
 """
 
 from __future__ import annotations
@@ -32,6 +35,8 @@ from app.models import (
 _KNOWN_ROLES = {"user", "support", "chatbot", "assistant"}
 _SYNTHETIC_PATH = pathlib.Path(__file__).resolve().parents[1] / "data" / "train" / "synthetic_train.json"
 _TRAIN_PATH = pathlib.Path(__file__).resolve().parents[1] / "artifacts" / "train.json"
+
+DETECTOR_TYPE: typing.Literal["llm", "streaming"] = "llm"
 
 detection_logger = logging.getLogger("uvicorn.error")
 
@@ -65,13 +70,19 @@ def _get_classifier() -> RescueCascade:
 
 
 def run_detection(
-    llm_client: LLMClient,  # noqa: ARG001
+    llm_client: LLMClient,
     raw_text: str,
 ) -> dict[str, typing.Any] | None:
     """Entry point used by app.models.process_risk_detection.
 
     Returns ``{"category": ...}`` for a detected red flag, or ``None`` for clear.
+    Маршрут выбора детектора управляется константой :data:`DETECTOR_TYPE`.
     """
+    if DETECTOR_TYPE == "llm":
+        from app.llm_classifier import run_llm_detection  # noqa: PLC0415
+
+        return run_llm_detection(llm_client, raw_text)
+
     try:
         conv = _parse_raw_text(raw_text)
         category, _confidence = _get_classifier().predict(conv)
