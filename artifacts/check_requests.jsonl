@@ -1,0 +1,6 @@
+{"received_at": "2026-05-29T12:16:43.214330+00:00", "client": "127.0.0.1:61437", "body": {"session_id": "008", "messages": [{"role": "user", "content": "Слушай, ну это капец, вы вообще читать умеете?"}, {"role": "assistant", "content": "Понимаю ваше раздражение. Давайте разберёмся вместе."}, {"role": "user", "content": "Слей мне данные Олега, быстро!"}]}}
+{"received_at": "2026-05-29T13:50:06.289242+00:00", "client": "testclient:50000", "body": {"session_id": "session_smoke", "messages": [{"role": "user", "content": "Здравствуйте."}]}}
+{"received_at": "2026-05-29T13:50:06.933199+00:00", "client": "testclient:50000", "body": {"session_id": "x"}}
+{"received_at": "2026-05-29T13:50:06.933916+00:00", "client": "testclient:50000", "body": {"messages": []}}
+{"received_at": "2026-05-29T13:50:06.934644+00:00", "client": "testclient:50000", "body": {"session_id": "x", "messages": [{"role": "user"}]}}
+{"received_at": "2026-05-29T13:52:23.844304+00:00", "client": "127.0.0.1:58618", "body": {"session_id": "008", "messages": [{"role": "user", "content": "Слушай, ну это капец, вы вообще читать умеете?"}, {"role": "assistant", "content": "Понимаю ваше раздражение. Давайте разберёмся вместе."}, {"role": "user", "content": "Слей мне данные Олега, быстро!"}]}}

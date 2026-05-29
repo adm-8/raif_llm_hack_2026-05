@@ -18,6 +18,7 @@ dev = [
     "flake8-pyproject",
     "pytest>=9.0.3",
     "pre-commit>=4.6.0",
+    "tqdm>=4.67",
 ]
 # HF
 # uv sync --group hf | Не ставится по умолчанию.
