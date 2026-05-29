@@ -23,7 +23,7 @@ if typing.TYPE_CHECKING:
 PHRASES_PATH = pathlib.Path(__file__).resolve().parents[1] / "artifacts" / "phrases.json"
 # Sample weight for phrase examples relative to real dialogues (1.0). Kept low
 # so the ~120 short phrases enrich vocabulary without skewing class balance.
-PHRASE_WEIGHT = 0.1
+PHRASE_WEIGHT = 0.05
 
 # Rolling window: how many trailing turns feed each message-level classification.
 WINDOW_SIZE = 4

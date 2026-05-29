@@ -29,3 +29,6 @@ Thumbs.db
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Saved /check requests log
+artifacts/check_requests.jsonl

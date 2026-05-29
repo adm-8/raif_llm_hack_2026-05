@@ -7,7 +7,8 @@ import typing
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from app.models import process_risk_detection
+from app.classifier import CONFIDENCE_THRESHOLD
+from app.models import CLEAR_CATEGORY, Conversation, Message, process_risk_detection
 
 check_router = APIRouter(tags=["Dialogue Check"])
 
@@ -50,10 +51,22 @@ def check_dialogue(
 ) -> DialogueCheckResponse:
     start_time = time.perf_counter()
 
-    raw_text = format_dialogue(request_body.messages)
+    clf = http_request.app.state.streaming_classifier
+    conv = Conversation(
+        session_id=request_body.session_id,
+        messages=[Message(role=m.role, content=m.content) for m in request_body.messages],
+    )
 
-    response = process_risk_detection(http_request.app.state.llm_client, raw_text)
-    predicted_red_flags = [RedFlagItem(category=response["category"])] if response else []
+    category, confidence = clf.predict(conv)
+
+    if confidence < CONFIDENCE_THRESHOLD:
+        # Low-confidence prediction: fall back to LLM for a second opinion.
+        raw_text = format_dialogue(request_body.messages)
+        llm_response = process_risk_detection(http_request.app.state.llm_client, raw_text)
+        if llm_response:
+            category = llm_response["category"]
+
+    predicted_red_flags = [] if category == CLEAR_CATEGORY else [RedFlagItem(category=category)]
 
     processing_time_ms = int((time.perf_counter() - start_time) * 1000)
 
