@@ -9,7 +9,7 @@ import typing
 import httpx
 from pydantic import BaseModel, Field
 
-OPENROUTER_MODEL = "google/gemini-2.5-flash"
+OPENROUTER_MODEL = "anthropic/claude-sonnet-4.6"
 CLEAR_CATEGORY = "clear"
 
 CATEGORIES = [
