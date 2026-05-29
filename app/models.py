@@ -1,13 +1,84 @@
-"""LLM-клиент и заглушка детектора red flags."""
+"""LLM-клиент и детектор red flags."""
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import typing
 
 import httpx
+from pydantic import BaseModel, Field
 
 OPENROUTER_MODEL = "google/gemini-2.5-flash"
+CLEAR_CATEGORY = "clear"
+
+CATEGORIES = [
+    "clear",
+    "information_extraction",
+    "transaction_coercion",
+    "policy_manipulation",
+    "identity_deception",
+    "adversarial_attack",
+    "scope_violation",
+]
+
+
+class Message(BaseModel):
+    role: str = Field(description="Роль отправителя сообщения (user, support, chatbot)")
+    content: str = Field(description="Содержимое сообщения")
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> Message:
+        return cls(role=data["role"], content=data["content"])
+
+
+class RedFlag(BaseModel):
+    category: str = Field(description="Категория обнаруженного риска")
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> RedFlag:
+        return cls(category=data["category"])
+
+
+@dataclasses.dataclass
+class Conversation:
+    session_id: str
+    messages: list[Message]
+    expected_red_flags: list[RedFlag] = dataclasses.field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, typing.Any]) -> Conversation:
+        return cls(
+            session_id=data["session_id"],
+            messages=[Message.from_dict(m) for m in data["messages"]],
+            expected_red_flags=[RedFlag.from_dict(f) for f in data.get("expected_red_flags", [])],
+        )
+
+    @property
+    def bot_messages(self) -> list[Message]:
+        return [m for m in self.messages if m.role == "chatbot"]
+
+    @property
+    def client_messages(self) -> list[Message]:
+        return [m for m in self.messages if m.role == "user"]
+
+    @property
+    def as_string(self) -> str:
+        return "\n".join(f"{m.role}: {m.content}" for m in self.messages)
+
+    @property
+    def bot_messages_as_string(self) -> str:
+        return "\n".join(m.content for m in self.bot_messages)
+
+    @property
+    def client_messages_as_string(self) -> str:
+        return "\n".join(m.content for m in self.client_messages)
+
+    @property
+    def category(self) -> str:
+        if not self.expected_red_flags:
+            return CLEAR_CATEGORY
+        return self.expected_red_flags[0].category
 
 
 @typing.final
@@ -42,25 +113,14 @@ class LLMClient:
             return None
 
 
-_DEMO_ANSWERS_QUEUE: list[str] = [
-    "identity_deception",
-    "identity_deception",
-    "identity_deception",
-    "identity_deception",
-    "adversarial_attack",
-]
-
-
 def process_risk_detection(
-    llm_client: LLMClient,  # noqa: ARG001
-    messages: str,  # noqa: ARG001
+        llm_client: LLMClient,
+        messages: str,
 ) -> dict[str, typing.Any] | None:
-    """Демо-заглушка: первые 5 запросов получают фейковую категорию, дальше None."""
-    try:
-        category = _DEMO_ANSWERS_QUEUE.pop(0)
-    except IndexError:
-        return None
-    return {"category": category}
+    """Делегирует детекцию в app.risk_detection (вся логика живёт там)."""
+    from app.risk_detection import run_detection  # noqa: PLC0415
+
+    return run_detection(llm_client, messages)
 
 
 def load_llm() -> LLMClient:
