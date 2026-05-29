@@ -52,10 +52,6 @@ SentenceTransformer('sentence-transformers/LaBSE'); \
 print('HF models cached.')" \
     && chown -R app:app /app/hf_cache
 
-# Предобучаем RescueCascade (fallback-модель, ~8 c) и сериализуем в artifacts/model.pkl.
-RUN python -m app.model_loader \
-    && chown -R app:app /app/artifacts
-
 # Если artifacts/e5_labse_model.pkl уже скопирован выше — пропускаем обучение.
 # Иначе обучаем V2-модель прямо при сборке (медленно, ~15 мин, но однократно).
 RUN if [ ! -f /app/artifacts/e5_labse_model.pkl ]; then \
