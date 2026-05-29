@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 llm_logger = logging.getLogger("uvicorn.error")
 
-OPENROUTER_MODEL = "anthropic/claude-opus-4.6"
+OPENROUTER_MODEL = "anthropic/claude-opus-4.8-fast"
 CLEAR_CATEGORY = "clear"
 
 CATEGORIES = [
