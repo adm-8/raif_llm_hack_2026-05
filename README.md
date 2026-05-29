@@ -190,4 +190,37 @@ raif_hackathon_boilerplate/
 └── uv.lock                  # Зафиксированные версии зависимостей
 ```
 
-Fake update
+---
+
+## 🧪 4. Обкатка LLM-классификатора
+
+Модуль `app/llm_classifier.py` — отдельный LLM-классификатор red-flag через OpenRouter (`gemini-2.5-flash`). В роутер `/check` не подключён, запускается напрямую для прогона по `artifacts/train.json` и оценки качества промпта.
+
+### Что делает
+
+- Оборачивает диалог в промпт со списком 7 категорий (`policy_manipulation`, `adversarial_attack`, `identity_deception`, `transaction_coercion`, `information_extraction`, `scope_violation`, `clear`) и их определениями.
+- Просит LLM вернуть строго JSON `{"category": "..."}` (используется `json_mode=True`).
+- При невалидном ответе делает один повтор. Если снова невалидно — возвращает `None` (трактуется как `clear`).
+- В режиме `__main__` параллельно (`ThreadPoolExecutor`, 8 воркеров) прогоняет диалоги из `artifacts/train.json` и печатает метрики.
+
+### Запуск
+
+Требуется `OPENROUTER_API_KEY` в окружении (или в `.env`).
+
+```bash
+# Прогон по 20 случайным диалогам — быстрая итерация по промпту:
+uv run python -m app.llm_classifier 20
+
+# Полный прогон по всему artifacts/train.json:
+uv run python -m app.llm_classifier
+```
+
+Аргумент `N` — опциональный, ограничивает число случайно выбранных диалогов. Без аргумента берётся весь датасет.
+
+### Что печатается
+
+- Сводка: общее количество примеров, overall accuracy, число невалидных ответов LLM (после повтора).
+- `sklearn.metrics.classification_report` — precision/recall/F1 по каждой из 7 категорий.
+- Confusion matrix (строки — истинная категория, столбцы — предсказание) с подписями.
+
+Используйте эти метрики, чтобы итеративно править промпт и определения категорий в `app/llm_classifier.py` (`CATEGORY_DEFINITIONS`, `_make_request`).
