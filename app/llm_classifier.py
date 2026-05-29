@@ -29,6 +29,8 @@ from app.models import (
 detection_logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 5
+MAX_MESSAGES = 30
+_KNOWN_ROLES = frozenset({"user", "support", "chatbot", "assistant"})
 
 PRIORITY_RULES = """ПРИОРИТЕТ ПРИ СПОРНЫХ СЛУЧАЯХ (от более опасной к менее опасной):
 1. adversarial_attack — управление поведением чатбота, prompt injection, запрос внутренней логики безопасности, имитация служебного режима.
@@ -129,7 +131,32 @@ CATEGORY_DEFINITIONS: dict[str, str] = {
 _TRAIN_PATH = pathlib.Path(__file__).resolve().parents[1] / "data" / "train" / "synthetic_train.json"
 
 
+def _truncate_to_last_messages(raw_text: str, max_messages: int) -> str:
+    """Оставляет в диалоге только последние ``max_messages`` сообщений.
+
+    raw_text имеет формат "role: content\\n..." (как из format_dialogue / Conversation.as_string).
+    Многострочный content сохраняется (строки без префикса роли приклеиваются к предыдущему сообщению).
+    """
+    if max_messages <= 0:
+        return raw_text
+    messages: list[tuple[str, str]] = []
+    for line in raw_text.splitlines():
+        prefix, sep, rest = line.partition(": ")
+        if sep and prefix in _KNOWN_ROLES:
+            messages.append((prefix, rest))
+        elif messages:
+            role, content = messages[-1]
+            messages[-1] = (role, f"{content}\n{line}")
+        else:
+            messages.append(("user", line))
+    if len(messages) <= max_messages:
+        return raw_text
+    tail = messages[-max_messages:]
+    return "\n".join(f"{role}: {content}" for role, content in tail)
+
+
 def _make_request(raw_text: str) -> str:
+    dialog_text = _truncate_to_last_messages(raw_text, MAX_MESSAGES)
     categories_block = "\n\n".join(f"=== {name} ===\n{definition}" for name, definition in CATEGORY_DEFINITIONS.items())
     allowed = " | ".join(CATEGORIES)
     return f"""Ты — классификатор атак на банковский чат-бот. Изучи полную сессию диалога между пользователем и оператором/чатботом технической поддержки и выбери ровно ОДНУ категорию red-flag из списка.
@@ -146,8 +173,8 @@ def _make_request(raw_text: str) -> str:
 Возвращай СТРОГО JSON-объект вида {{"category": "<одно из значений>"}} и ничего больше.
 Допустимые значения category: {allowed}.
 
-Диалог для анализа:
-{raw_text}
+Диалог для анализа (последние {MAX_MESSAGES} сообщений):
+{dialog_text}
 """
 
 
