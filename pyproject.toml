@@ -62,7 +62,7 @@ show_error_codes = true
 pretty = true
 
 [[tool.mypy.overrides]]
-module = ["torch.*", "transformers.*"]
+module = ["torch.*", "transformers.*", "sklearn.*"]
 ignore_missing_imports = true
 
 [tool.flake8]
@@ -74,3 +74,4 @@ testpaths = ["tests"]
 addopts = "-ra -q --strict-markers --strict-config"
 filterwarnings = ["error"]
 pythonpath = ["."]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
