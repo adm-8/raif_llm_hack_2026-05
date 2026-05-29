@@ -1,6 +1,7 @@
 # ruff: noqa: RUF001, RUF002
 """Файл для тестирования с eval сервисом, желательно не трогать."""
 
+import logging
 import time
 import typing
 
@@ -11,6 +12,7 @@ from app.classifier import CONFIDENCE_THRESHOLD
 from app.models import CLEAR_CATEGORY, Conversation, Message, process_risk_detection
 
 check_router = APIRouter(tags=["Dialogue Check"])
+check_logger = logging.getLogger("uvicorn.error")
 
 
 @typing.final
@@ -58,6 +60,12 @@ def check_dialogue(
     )
 
     category, confidence = clf.predict(conv)
+    check_logger.info(
+        "streaming session_id=%s category=%s confidence=%.4f",
+        request_body.session_id,
+        category,
+        confidence,
+    )
 
     if confidence < CONFIDENCE_THRESHOLD:
         # Low-confidence prediction: fall back to LLM for a second opinion.

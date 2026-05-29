@@ -35,7 +35,7 @@ from app.streaming_classifier import StreamingClassifier
 _KNOWN_ROLES = {"user", "support", "chatbot", "assistant"}
 _TRAIN_PATH = pathlib.Path(__file__).resolve().parents[1] / "artifacts" / "train.json"
 
-DETECTOR_TYPE: typing.Literal["llm", "streaming"] = "llm"
+DETECTOR_TYPE: typing.Literal["llm", "streaming"] = "streaming"
 
 detection_logger = logging.getLogger("uvicorn.error")
 
