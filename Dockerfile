@@ -33,6 +33,8 @@ WORKDIR /app
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app app ./app
+# Артефакты классификатора (train.json + phrases.json) — без них /check падает с 500.
+COPY --chown=app:app artifacts ./artifacts
 
 USER app
 
