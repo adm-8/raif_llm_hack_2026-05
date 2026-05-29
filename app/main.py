@@ -1,5 +1,6 @@
 import collections.abc
 import contextlib
+import json
 import logging
 import os
 from pathlib import Path
@@ -7,19 +8,36 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from app.middleware import CheckRequestCaptureMiddleware
-from app.models import load_llm
+from app.models import Conversation, load_llm
 from app.request_store import CheckRequestStore
 from app.routers import check_router, health_router, requests_router
+from app.streaming_classifier import StreamingClassifier
 
 app_logger = logging.getLogger("uvicorn.error")
 
 CHECK_REQUESTS_LOG = Path(os.getenv("CHECK_REQUESTS_LOG", "artifacts/check_requests.jsonl"))
 request_store = CheckRequestStore(CHECK_REQUESTS_LOG)
 
+_SYNTHETIC_TRAIN = Path("data/train/synthetic_train.json")
+_ORIG_TRAIN = Path("artifacts/train.json")
+
+
+def _load_streaming_classifier() -> StreamingClassifier:
+    convs: list[Conversation] = []
+    for path in (_SYNTHETIC_TRAIN, _ORIG_TRAIN):
+        if path.exists():
+            convs += [Conversation.from_dict(d) for d in json.loads(path.read_text(encoding="utf-8"))]
+    clf = StreamingClassifier()
+    if convs:
+        clf.fit(convs)
+        app_logger.info("StreamingClassifier fitted on %d conversations", len(convs))
+    return clf
+
 
 @contextlib.asynccontextmanager
 async def run_lifespan(fastapi_app: FastAPI) -> collections.abc.AsyncIterator[None]:
     fastapi_app.state.llm_client = load_llm()
+    fastapi_app.state.streaming_classifier = _load_streaming_classifier()
     fastapi_app.state.request_store = request_store
 
     server_port = os.getenv("DEV_PORT", "8787")
