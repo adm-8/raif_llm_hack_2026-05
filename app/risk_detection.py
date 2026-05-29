@@ -21,15 +21,16 @@ import logging
 import pathlib
 import typing
 
+from app.ensemble_classifier import RescueCascade
 from app.models import (
     CLEAR_CATEGORY,
     Conversation,
     LLMClient,
     Message,
 )
-from app.streaming_classifier import StreamingClassifier
 
 _KNOWN_ROLES = {"user", "support", "chatbot", "assistant"}
+_SYNTHETIC_PATH = pathlib.Path(__file__).resolve().parents[1] / "data" / "train" / "synthetic_train.json"
 _TRAIN_PATH = pathlib.Path(__file__).resolve().parents[1] / "artifacts" / "train.json"
 
 detection_logger = logging.getLogger("uvicorn.error")
@@ -48,16 +49,18 @@ def _parse_raw_text(raw_text: str) -> Conversation:
     return Conversation(session_id="", messages=messages)
 
 
-_classifier: StreamingClassifier | None = None
+_classifier: RescueCascade | None = None
 
 
-def _get_classifier() -> StreamingClassifier:
-    """Train the classifier once (train.json + phrase lexicon) and cache it."""
+def _get_classifier() -> RescueCascade:
+    """Train the production RescueCascade once (synthetic + real) and cache it."""
     global _classifier  # noqa: PLW0603
     if _classifier is None:
-        raw = json.loads(_TRAIN_PATH.read_text(encoding="utf-8"))
-        conversations = [Conversation.from_dict(item) for item in raw]
-        _classifier = StreamingClassifier().fit(conversations)
+        conversations: list[Conversation] = []
+        for path in (_SYNTHETIC_PATH, _TRAIN_PATH):
+            if path.exists():
+                conversations += [Conversation.from_dict(d) for d in json.loads(path.read_text(encoding="utf-8"))]
+        _classifier = RescueCascade().fit(conversations)
     return _classifier
 
 

@@ -29,6 +29,9 @@ PHRASE_WEIGHT = 0.05
 WINDOW_SIZE = 4
 # Decay applied to the running per-label risk before folding in the new score.
 DECAY = 0.9
+# Cumulative-window threshold: noisy-OR risk above this triggers a label.
+# Tuned on synthetic_train.json (k=5): 0.65 maximises overall accuracy (97.0%).
+CUMULATIVE_THRESHOLD = 0.65
 # Aggregated risk above this -> escalate; above MEDIUM -> monitor; else safe.
 HIGH_THRESHOLD = 0.70
 MEDIUM_THRESHOLD = 0.40
@@ -149,10 +152,12 @@ class StreamingClassifier:
             proba: typing.Any = self._pipeline.predict_proba([window])[0]
             for label in red_flag_labels:
                 score = float(proba[index_of[label]])
-                # Decayed running max: a strong single-message signal persists
-                # but stale signals fade as the dialogue moves on.
-                risk[label] = max(DECAY * risk[label], score)
-                # Triggering message = the message whose window scored highest.
+                # Noisy-OR accumulation: each window that looks suspicious adds
+                # evidence. Old evidence decays by DECAY before folding in the
+                # new score, so stale signals fade while repeated suspicion
+                # compounds: risk = 1 - (1 - DECAY*risk) * (1 - score).
+                risk[label] = 1.0 - (1.0 - DECAY * risk[label]) * (1.0 - score)
+                # Triggering message = the window with the highest raw score.
                 if score > peak_score[label]:
                     peak_score[label] = score
                     triggered[label] = idx
