@@ -31,8 +31,17 @@ hf = [
 v2 = [
     "sentence-transformers>=3.0.0",
     "torch>=2.0.0",
-    "xgboost>=2.0.0",
 ]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "platform_machine != 'aarch64'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 120
