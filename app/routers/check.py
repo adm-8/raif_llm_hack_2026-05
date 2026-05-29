@@ -7,8 +7,7 @@ import typing
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from app.classifier import CONFIDENCE_THRESHOLD
-from app.models import CLEAR_CATEGORY, Conversation, Message, process_risk_detection
+from app.models import CLEAR_CATEGORY, Conversation, Message
 
 check_router = APIRouter(tags=["Dialogue Check"])
 
@@ -17,11 +16,6 @@ check_router = APIRouter(tags=["Dialogue Check"])
 class DialogueMessage(BaseModel):
     role: str = Field(description="Роль отправителя сообщения (user, support, assistant)")
     content: str = Field(description="Содержимое сообщения")
-
-
-def format_dialogue(messages: list[DialogueMessage]) -> str:
-    """Форматирует историю сообщений диалога в один текстовый блок."""
-    return "\n".join(f"{one_message.role}: {one_message.content}" for one_message in messages)
 
 
 @typing.final
@@ -57,14 +51,10 @@ def check_dialogue(
         messages=[Message(role=m.role, content=m.content) for m in request_body.messages],
     )
 
-    category, confidence = clf.predict(conv)
-
-    if confidence < CONFIDENCE_THRESHOLD:
-        # Low-confidence prediction: fall back to LLM for a second opinion.
-        raw_text = format_dialogue(request_body.messages)
-        llm_response = process_risk_detection(http_request.app.state.llm_client, raw_text)
-        if llm_response:
-            category = llm_response["category"]
+    # Offline RescueCascade is the sole decision-maker (no LLM fallback): the old
+    # low-confidence branch re-ran a weaker train.json-only model and could
+    # override the stronger combined-trained cascade verdict.
+    category, _confidence = clf.predict(conv)
 
     predicted_red_flags = [] if category == CLEAR_CATEGORY else [RedFlagItem(category=category)]
 

@@ -7,11 +7,11 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from app.ensemble_classifier import RescueCascade
 from app.middleware import CheckRequestCaptureMiddleware
 from app.models import Conversation, load_llm
 from app.request_store import CheckRequestStore
 from app.routers import check_router, health_router, requests_router
-from app.streaming_classifier import StreamingClassifier
 
 app_logger = logging.getLogger("uvicorn.error")
 
@@ -22,15 +22,22 @@ _SYNTHETIC_TRAIN = Path("data/train/synthetic_train.json")
 _ORIG_TRAIN = Path("artifacts/train.json")
 
 
-def _load_streaming_classifier() -> StreamingClassifier:
+def _load_streaming_classifier() -> RescueCascade:
+    """Fit the production RescueCascade on all available data (synthetic + real).
+
+    Combined training is the dominant accuracy lever (real-50 LOO ~0.82 vs ~0.50
+    for synthetic-only); the cascade then rescues violations buried in long
+    dialogues. Both base models are cheap TF-IDF + LogReg, so startup is a few
+    seconds and inference stays well under the 5 s/request budget.
+    """
     convs: list[Conversation] = []
     for path in (_SYNTHETIC_TRAIN, _ORIG_TRAIN):
         if path.exists():
             convs += [Conversation.from_dict(d) for d in json.loads(path.read_text(encoding="utf-8"))]
-    clf = StreamingClassifier()
+    clf = RescueCascade()
     if convs:
         clf.fit(convs)
-        app_logger.info("StreamingClassifier fitted on %d conversations", len(convs))
+        app_logger.info("RescueCascade fitted on %d conversations", len(convs))
     return clf
 
 
