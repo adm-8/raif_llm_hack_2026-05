@@ -9,7 +9,7 @@ import typing
 import httpx
 from pydantic import BaseModel, Field
 
-OPENROUTER_MODEL = "anthropic/claude-sonnet-4.6"
+OPENROUTER_MODEL = "anthropic/claude-opus-4.6"
 CLEAR_CATEGORY = "clear"
 
 CATEGORIES = [
