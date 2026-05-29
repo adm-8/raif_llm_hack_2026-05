@@ -36,7 +36,7 @@ COPY --chown=app:app app ./app
 # Артефакты классификатора (train.json + phrases.json) — без них /check падает с 500.
 COPY --chown=app:app artifacts ./artifacts
 # Обучающие данные для StreamingClassifier (synthetic + orgs).
-COPY --chown=app:app data ./data
+COPY --chown=app:app data/train ./data/train
 
 USER app
 
