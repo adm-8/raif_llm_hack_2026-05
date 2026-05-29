@@ -189,3 +189,5 @@ raif_hackathon_boilerplate/
 ├── pyproject.toml           # Зависимости проекта и конфигурация Ruff, mypy, pytest
 └── uv.lock                  # Зафиксированные версии зависимостей
 ```
+
+Fake update
