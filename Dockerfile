@@ -35,8 +35,14 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app app ./app
 # Артефакты классификатора (train.json + phrases.json) — без них /check падает с 500.
 COPY --chown=app:app artifacts ./artifacts
-# Обучающие данные для StreamingClassifier (synthetic + orgs).
+# Обучающие данные для RescueCascade (synthetic + orgs).
 COPY --chown=app:app data/train ./data/train
+
+# Предобучаем RescueCascade на этапе сборки и сериализуем в artifacts/model.pkl,
+# чтобы контейнер стартовал за <1 c (а не обучал модель ~8.5 c на старте, рискуя
+# таймаутом/OOM и нездоровым healthcheck'ом → 0 у эвалюатора).
+RUN python -m app.model_loader \
+    && chown -R app:app /app/artifacts
 
 USER app
 

@@ -19,12 +19,9 @@ Detector selection
 
 from __future__ import annotations
 
-import json
 import logging
-import pathlib
 import typing
 
-from app.ensemble_classifier import RescueCascade
 from app.models import (
     CLEAR_CATEGORY,
     Conversation,
@@ -32,9 +29,10 @@ from app.models import (
     Message,
 )
 
+if typing.TYPE_CHECKING:
+    from app.ensemble_classifier import RescueCascade
+
 _KNOWN_ROLES = {"user", "support", "chatbot", "assistant"}
-_SYNTHETIC_PATH = pathlib.Path(__file__).resolve().parents[1] / "data" / "train" / "synthetic_train.json"
-_TRAIN_PATH = pathlib.Path(__file__).resolve().parents[1] / "artifacts" / "train.json"
 
 DETECTOR_TYPE: typing.Literal["llm", "streaming"] = "llm"
 
@@ -58,14 +56,12 @@ _classifier: RescueCascade | None = None
 
 
 def _get_classifier() -> RescueCascade:
-    """Train the production RescueCascade once (synthetic + real) and cache it."""
+    """Load the pre-fitted RescueCascade once (build-time pickle) and cache it."""
     global _classifier  # noqa: PLW0603
     if _classifier is None:
-        conversations: list[Conversation] = []
-        for path in (_SYNTHETIC_PATH, _TRAIN_PATH):
-            if path.exists():
-                conversations += [Conversation.from_dict(d) for d in json.loads(path.read_text(encoding="utf-8"))]
-        _classifier = RescueCascade().fit(conversations)
+        from app.model_loader import load_model  # noqa: PLC0415
+
+        _classifier = load_model()
     return _classifier
 
 
