@@ -22,7 +22,7 @@ def _to_features(conv: Conversation) -> str:
 def _build_pipeline() -> Pipeline:
     return Pipeline([
         ("tfidf", TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), max_features=30_000, sublinear_tf=True)),
-        ("clf", LogisticRegression(max_iter=1000, C=3.0)),
+        ("clf", LogisticRegression(max_iter=1000, C=3.0, class_weight="balanced")),
     ])
 
 
