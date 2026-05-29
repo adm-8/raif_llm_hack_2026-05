@@ -51,9 +51,6 @@ def check_dialogue(
         messages=[Message(role=m.role, content=m.content) for m in request_body.messages],
     )
 
-    # Offline RescueCascade is the sole decision-maker (no LLM fallback): the old
-    # low-confidence branch re-ran a weaker train.json-only model and could
-    # override the stronger combined-trained cascade verdict.
     category, _confidence = clf.predict(conv)
 
     predicted_red_flags = [] if category == CLEAR_CATEGORY else [RedFlagItem(category=category)]
