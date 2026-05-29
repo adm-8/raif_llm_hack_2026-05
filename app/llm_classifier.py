@@ -176,20 +176,23 @@ def _classify_with_retries(llm_client: LLMClient, raw_text: str) -> str | None:
     """
     prompt = _make_request(raw_text)
     total_attempts = MAX_RETRIES + 1
+    last_response: str | None = None
     for attempt in range(1, total_attempts + 1):
-        response = llm_client.request_completion(prompt, json_mode=True)
-        category = _parse_category(response)
+        last_response = llm_client.request_completion(prompt, json_mode=True)
+        category = _parse_category(last_response)
         if category is not None:
             return category
         if attempt < total_attempts:
             detection_logger.warning(
-                "LLM вернула невалидный ответ (попытка %d/%d) — повтор",
+                "LLM вернула невалидный ответ (попытка %d/%d). Raw: %r — повтор",
                 attempt,
                 total_attempts,
+                (last_response or "")[:500],
             )
     detection_logger.warning(
-        "LLM вернула невалидный ответ после %d попыток — clear",
+        "LLM вернула невалидный ответ после %d попыток. Last raw: %r — clear",
         total_attempts,
+        (last_response or "")[:500],
     )
     return None
 

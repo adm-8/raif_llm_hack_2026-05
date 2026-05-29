@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
 import typing
 
 import httpx
 from pydantic import BaseModel, Field
+
+llm_logger = logging.getLogger("uvicorn.error")
 
 OPENROUTER_MODEL = "anthropic/claude-opus-4.6"
 CLEAR_CATEGORY = "clear"
@@ -90,6 +93,7 @@ class LLMClient:
 
     def request_completion(self, prompt_text: str, *, json_mode: bool = True) -> str | None:
         if not self.api_key:
+            llm_logger.warning("OPENROUTER_API_KEY не задан — вызов LLM пропущен")
             return None
 
         request_payload: dict[str, typing.Any] = {
@@ -107,9 +111,30 @@ class LLMClient:
                     "Content-Type": "application/json",
                 },
                 json=request_payload,
+                timeout=60.0,
             )
-            return str(response.json()["choices"][0]["message"]["content"])
         except Exception:  # noqa: BLE001
+            llm_logger.exception("HTTP-ошибка при вызове OpenRouter")
+            return None
+
+        if response.status_code != 200:  # noqa: PLR2004
+            llm_logger.warning(
+                "OpenRouter %s вернул статус %d: %s",
+                OPENROUTER_MODEL,
+                response.status_code,
+                response.text[:500],
+            )
+            return None
+
+        try:
+            data = response.json()
+            return str(data["choices"][0]["message"]["content"])
+        except (KeyError, IndexError, ValueError, TypeError):
+            llm_logger.warning(
+                "Не удалось распарсить ответ OpenRouter (%s): %s",
+                OPENROUTER_MODEL,
+                response.text[:500],
+            )
             return None
 
 
