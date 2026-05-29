@@ -32,3 +32,6 @@ Thumbs.db
 
 # Saved /check requests log
 artifacts/check_requests.jsonl
+
+# Pre-fitted model baked at Docker build time
+artifacts/model.pkl

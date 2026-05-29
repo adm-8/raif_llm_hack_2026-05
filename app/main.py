@@ -1,15 +1,14 @@
 import collections.abc
 import contextlib
-import json
 import logging
 import os
 from pathlib import Path
 
 from fastapi import FastAPI
 
-from app.ensemble_classifier import RescueCascade
 from app.middleware import CheckRequestCaptureMiddleware
-from app.models import Conversation, load_llm
+from app.model_loader import load_model
+from app.models import load_llm
 from app.request_store import CheckRequestStore
 from app.routers import check_router, health_router, requests_router
 
@@ -18,33 +17,13 @@ app_logger = logging.getLogger("uvicorn.error")
 CHECK_REQUESTS_LOG = Path(os.getenv("CHECK_REQUESTS_LOG", "artifacts/check_requests.jsonl"))
 request_store = CheckRequestStore(CHECK_REQUESTS_LOG)
 
-_SYNTHETIC_TRAIN = Path("data/train/synthetic_train.json")
-_ORIG_TRAIN = Path("artifacts/train.json")
-
-
-def _load_streaming_classifier() -> RescueCascade:
-    """Fit the production RescueCascade on all available data (synthetic + real).
-
-    Combined training is the dominant accuracy lever (real-50 LOO ~0.82 vs ~0.50
-    for synthetic-only); the cascade then rescues violations buried in long
-    dialogues. Both base models are cheap TF-IDF + LogReg, so startup is a few
-    seconds and inference stays well under the 5 s/request budget.
-    """
-    convs: list[Conversation] = []
-    for path in (_SYNTHETIC_TRAIN, _ORIG_TRAIN):
-        if path.exists():
-            convs += [Conversation.from_dict(d) for d in json.loads(path.read_text(encoding="utf-8"))]
-    clf = RescueCascade()
-    if convs:
-        clf.fit(convs)
-        app_logger.info("RescueCascade fitted on %d conversations", len(convs))
-    return clf
-
 
 @contextlib.asynccontextmanager
 async def run_lifespan(fastapi_app: FastAPI) -> collections.abc.AsyncIterator[None]:
     fastapi_app.state.llm_client = load_llm()
-    fastapi_app.state.streaming_classifier = _load_streaming_classifier()
+    # Production RescueCascade, loaded from the build-time pickle (fast boot);
+    # falls back to fitting on startup if the pickle is missing/incompatible.
+    fastapi_app.state.streaming_classifier = load_model()
     fastapi_app.state.request_store = request_store
 
     server_port = os.getenv("DEV_PORT", "8787")
