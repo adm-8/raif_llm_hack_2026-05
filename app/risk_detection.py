@@ -17,6 +17,7 @@ Pipeline
 from __future__ import annotations
 
 import json
+import logging
 import pathlib
 import typing
 
@@ -30,6 +31,8 @@ from app.streaming_classifier import StreamingClassifier
 
 _KNOWN_ROLES = {"user", "support", "chatbot", "assistant"}
 _TRAIN_PATH = pathlib.Path(__file__).resolve().parents[1] / "artifacts" / "train.json"
+
+detection_logger = logging.getLogger("uvicorn.error")
 
 
 def _parse_raw_text(raw_text: str) -> Conversation:
@@ -66,8 +69,12 @@ def run_detection(
 
     Returns ``{"category": ...}`` for a detected red flag, or ``None`` for clear.
     """
-    conv = _parse_raw_text(raw_text)
-    category, _confidence = _get_classifier().predict(conv)
+    try:
+        conv = _parse_raw_text(raw_text)
+        category, _confidence = _get_classifier().predict(conv)
+    except Exception:
+        detection_logger.exception("Детекция упала — возвращаю clear")
+        return None
 
     if category == CLEAR_CATEGORY:
         return None
