@@ -1028,6 +1028,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "tqdm" },
 ]
 hf = [
     { name = "torch" },
@@ -1050,6 +1051,7 @@ dev = [
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "ruff", specifier = "==0.14.14" },
+    { name = "tqdm", specifier = ">=4.67" },
 ]
 hf = [
     { name = "torch", specifier = "==2.10.0" },
