@@ -26,6 +26,13 @@ hf = [
     "transformers==5.0.0",
     "torch==2.10.0",
 ]
+# v2: E5 + LaBSE + PyTorch MLP strategy (app/v2)
+# uv sync --group v2 | Не ставится по умолчанию.
+v2 = [
+    "sentence-transformers>=3.0.0",
+    "torch>=2.0.0",
+    "xgboost>=2.0.0",
+]
 
 [tool.ruff]
 line-length = 120
