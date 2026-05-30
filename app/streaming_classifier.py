@@ -105,6 +105,8 @@ class StreamingClassifier:
         *,
         augment_with_phrases: bool = True,
         phrase_weight: float = PHRASE_WEIGHT,
+        cumulative: bool = False,
+        cumulative_threshold: float = CUMULATIVE_THRESHOLD,
     ) -> None:
         self._pipeline: Pipeline | None = None
         self._label_encoder = LabelEncoder()
@@ -116,6 +118,13 @@ class StreamingClassifier:
         # enrich the vocabulary without skewing the class balance.
         self._augment_with_phrases = augment_with_phrases
         self._phrase_weight = phrase_weight
+        # Cumulative verdict: pick the final category from the streamed noisy-OR
+        # per-label risk (the label whose risk crosses ``cumulative_threshold``)
+        # instead of the whole-conversation argmax. Suited to a model trained on
+        # short phrases, where a brief match in any window is the real signal and
+        # whole-conversation features would dilute it.
+        self._cumulative = cumulative
+        self._cumulative_threshold = cumulative_threshold
 
     def fit(self, conversations: list[Conversation]) -> StreamingClassifier:
         # Trained on whole-conversation features — same recipe as FastClassifier,
@@ -142,7 +151,16 @@ class StreamingClassifier:
             raise RuntimeError("Call fit() first.")
 
         red_flag_labels = [c for c in CATEGORIES if c != CLEAR_CATEGORY]
-        index_of = {label: int(self._label_encoder.transform([label])[0]) for label in red_flag_labels}
+        # Map each label to its predict_proba COLUMN via the pipeline's own
+        # classes_ (the encoded labels actually seen in training). A label absent
+        # from training (e.g. `clear` when fitting on phrases only) maps to None
+        # and scores 0 — keeps the index aligned regardless of which classes the
+        # training set happened to contain.
+        trained_codes = list(self._pipeline.classes_)
+        col_of: dict[str, int | None] = {}
+        for label in red_flag_labels:
+            code = int(self._label_encoder.transform([label])[0])
+            col_of[label] = trained_codes.index(code) if code in trained_codes else None
         risk: dict[str, float] = dict.fromkeys(red_flag_labels, 0.0)
         peak_score: dict[str, float] = dict.fromkeys(red_flag_labels, 0.0)
         triggered: dict[str, int] = {}
@@ -151,7 +169,8 @@ class StreamingClassifier:
         for idx, window in enumerate(_windows(conv)):
             proba: typing.Any = self._pipeline.predict_proba([window])[0]
             for label in red_flag_labels:
-                score = float(proba[index_of[label]])
+                col = col_of[label]
+                score = float(proba[col]) if col is not None else 0.0
                 # Noisy-OR accumulation: each window that looks suspicious adds
                 # evidence. Old evidence decays by DECAY before folding in the
                 # new score, so stale signals fade while repeated suspicion
@@ -164,11 +183,23 @@ class StreamingClassifier:
 
         top_streaming_risk = max(risk.values()) if risk else 0.0
 
-        # --- Verdict: committed category comes from the whole-conversation signal.
-        full_proba: typing.Any = self._pipeline.predict_proba([_to_features(conv)])[0]
-        best_idx = int(full_proba.argmax())
-        final_category = str(self._label_encoder.inverse_transform([best_idx])[0])
-        confidence = float(full_proba[best_idx])
+        if self._cumulative:
+            # --- Cumulative verdict: the label with the highest streamed risk,
+            # committed only if it crosses the threshold; else clear.
+            best_label = max(red_flag_labels, key=lambda label: risk[label]) if red_flag_labels else CLEAR_CATEGORY
+            if risk.get(best_label, 0.0) >= self._cumulative_threshold:
+                final_category = best_label
+                confidence = risk[best_label]
+            else:
+                final_category = CLEAR_CATEGORY
+                confidence = 1.0 - top_streaming_risk
+        else:
+            # --- Verdict: committed category comes from the whole-conversation signal.
+            full_proba: typing.Any = self._pipeline.predict_proba([_to_features(conv)])[0]
+            best_col = int(full_proba.argmax())
+            best_code = trained_codes[best_col]
+            final_category = str(self._label_encoder.inverse_transform([best_code])[0])
+            confidence = float(full_proba[best_col])
 
         # Decision blends the live streaming risk with the committed verdict so a
         # confident red-flag verdict never reads "safe": a clear verdict can still
