@@ -1,20 +1,12 @@
 # ruff: noqa: RUF002
-"""Real risk detection wired into ``check_dialogue`` without touching ``check.py``.
+"""Risk detection wired into ``check_dialogue``.
 
 ``check.py`` calls ``app.models.process_risk_detection(llm_client, raw_text)``.
-That function delegates here, so all behaviour changes live in this file.
+That function delegates here.
 
-Detector selection
-------------------
-Модуль поддерживает два режима, переключаемых константой ``DETECTOR_TYPE``:
-
-* ``"llm"`` (по умолчанию) — делегирует в :func:`app.llm_classifier.run_llm_detection`,
-  который оборачивает диалог в промпт и вызывает OpenRouter.
-* ``"streaming"`` — использует офлайн :class:`~app.streaming_classifier.StreamingClassifier`,
-  обучаемый один раз из ``artifacts/train.json`` плюс лексикон ``artifacts/phrases.json``.
-
-Чтобы переключиться, поменяйте значение ``DETECTOR_TYPE`` в этом файле.
-В обоих режимах возвращается ``{"category": ...}`` для red flag или ``None`` для ``clear``.
+Detector selection: ``DETECTOR_TYPE`` constant controls mode.
+* ``"llm"`` (default) — delegates to :func:`app.llm_classifier.run_llm_detection`.
+* ``"regex"`` — uses :class:`~app.regex_classifier.RegexClassifier` (no training).
 """
 
 from __future__ import annotations
@@ -28,15 +20,22 @@ from app.models import (
     LLMClient,
     Message,
 )
-
-if typing.TYPE_CHECKING:
-    from app.ensemble_classifier import RescueCascade
+from app.regex_classifier import RegexClassifier
 
 _KNOWN_ROLES = {"user", "support", "chatbot", "assistant"}
 
-DETECTOR_TYPE: typing.Literal["llm", "streaming"] = "llm"
+DETECTOR_TYPE: typing.Literal["llm", "regex"] = "llm"
 
 detection_logger = logging.getLogger("uvicorn.error")
+
+_classifier: RegexClassifier | None = None
+
+
+def _get_classifier() -> RegexClassifier:
+    global _classifier  # noqa: PLW0603
+    if _classifier is None:
+        _classifier = RegexClassifier()
+    return _classifier
 
 
 def _parse_raw_text(raw_text: str) -> Conversation:
@@ -52,28 +51,11 @@ def _parse_raw_text(raw_text: str) -> Conversation:
     return Conversation(session_id="", messages=messages)
 
 
-_classifier: RescueCascade | None = None
-
-
-def _get_classifier() -> RescueCascade:
-    """Load the pre-fitted RescueCascade once (build-time pickle) and cache it."""
-    global _classifier  # noqa: PLW0603
-    if _classifier is None:
-        from app.model_loader import load_model  # noqa: PLC0415
-
-        _classifier = load_model()
-    return _classifier
-
-
 def run_detection(
     llm_client: LLMClient,
     raw_text: str,
 ) -> dict[str, typing.Any] | None:
-    """Entry point used by app.models.process_risk_detection.
-
-    Returns ``{"category": ...}`` for a detected red flag, or ``None`` for clear.
-    Маршрут выбора детектора управляется константой :data:`DETECTOR_TYPE`.
-    """
+    """Entry point used by app.models.process_risk_detection."""
     if DETECTOR_TYPE == "llm":
         from app.llm_classifier import run_llm_detection  # noqa: PLC0415
 

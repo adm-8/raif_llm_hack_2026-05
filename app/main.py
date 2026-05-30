@@ -15,7 +15,6 @@ from app.routers import check_router, health_router, requests_router
 app_logger = logging.getLogger("uvicorn.error")
 
 # Suppress noisy INFO-level HTTP logs from huggingface_hub / httpx.
-# These are normal cache-validation HEAD requests — not errors.
 for _noisy_logger in ("httpx", "huggingface_hub", "huggingface_hub.file_download"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
@@ -27,16 +26,22 @@ request_store = CheckRequestStore(CHECK_REQUESTS_LOG)
 async def run_lifespan(fastapi_app: FastAPI) -> collections.abc.AsyncIterator[None]:
     fastapi_app.state.llm_client = load_llm()
 
-    # Try the high-accuracy V2 classifier (E5 + LaBSE + MLP, F1≈0.848) first.
-    # Falls back to RescueCascade if the v2 pkl or its dependencies are missing.
+    # Try V3 (E5-only, fast) → V2 (E5+LaBSE) → RescueCascade fallback.
     try:
-        from app.v2.model_loader import load_model as load_v2_model  # noqa: PLC0415
+        from app.v3.model_loader import load_model as load_v3_model  # noqa: PLC0415
 
-        fastapi_app.state.streaming_classifier = load_v2_model()
-        app_logger.info("Using V2 classifier (MultilingualE5Classifier)")
+        fastapi_app.state.streaming_classifier = load_v3_model()
+        app_logger.info("Using V3 classifier (E5-only, no LaBSE)")
     except Exception:  # noqa: BLE001
-        app_logger.exception("V2 classifier unavailable — falling back to RescueCascade")
-        fastapi_app.state.streaming_classifier = load_model()
+        app_logger.warning("V3 classifier unavailable — trying V2")
+        try:
+            from app.v2.model_loader import load_model as load_v2_model  # noqa: PLC0415
+
+            fastapi_app.state.streaming_classifier = load_v2_model()
+            app_logger.info("Using V2 classifier (E5+LaBSE)")
+        except Exception:  # noqa: BLE001
+            app_logger.exception("V2 classifier unavailable — falling back to RescueCascade")
+            fastapi_app.state.streaming_classifier = load_model()
 
     fastapi_app.state.request_store = request_store
 
