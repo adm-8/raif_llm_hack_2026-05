@@ -39,6 +39,19 @@ Factory = typing.Callable[[], typing.Any]
 DEFAULT_RESCUE_THRESHOLD = 0.60
 
 
+def last_n_messages(conv: Conversation, n: int) -> Conversation:
+    """Conversation reduced to its last ``n`` messages of ANY role.
+
+    Unlike the user-only variant, this keeps the surrounding bot/support turns —
+    the recent exchange in context, not just the client's last lines.
+    """
+    return Conversation(
+        session_id=conv.session_id,
+        messages=conv.messages[-n:],
+        expected_red_flags=conv.expected_red_flags,
+    )
+
+
 def _default_clean() -> WindowClassifier:
     # Full-text char features + window pooling; small margin keeps clear high.
     return WindowClassifier(clear_margin=0.10, pipeline_factory=_build_char_pipeline, full_text=True)
@@ -57,17 +70,27 @@ class RescueCascade:
         augmented_factory: Factory = _default_augmented,
         *,
         rescue_threshold: float = DEFAULT_RESCUE_THRESHOLD,
+        last_n_messages: int | None = None,
     ) -> None:
         self._clean = clean_factory()
         self._augmented = augmented_factory()
         self._rescue_threshold = rescue_threshold
+        # If set, every dialogue (train and predict) is reduced to its last N
+        # messages (any role — user + bot/support) before featurisation. Default
+        # None = full context.
+        self._last_n_messages = last_n_messages
+
+    def _prep(self, conv: Conversation) -> Conversation:
+        return conv if self._last_n_messages is None else last_n_messages(conv, self._last_n_messages)
 
     def fit(self, conversations: list[Conversation]) -> RescueCascade:
-        self._clean.fit(conversations)
-        self._augmented.fit(conversations)
+        prepped = [self._prep(c) for c in conversations]
+        self._clean.fit(prepped)
+        self._augmented.fit(prepped)
         return self
 
     def predict(self, conv: Conversation) -> tuple[str, float]:
+        conv = self._prep(conv)
         clean_cat, clean_conf = self._clean.predict(conv)
         if clean_cat != CLEAR_CATEGORY:
             # Trust the precise model's positive verdicts.
