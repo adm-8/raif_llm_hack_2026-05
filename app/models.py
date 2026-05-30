@@ -113,16 +113,6 @@ class LLMClient:
             return None
 
 
-def process_risk_detection(
-        llm_client: LLMClient,
-        messages: str,
-) -> dict[str, typing.Any] | None:
-    """Делегирует детекцию в app.risk_detection (вся логика живёт там)."""
-    from app.risk_detection import run_detection  # noqa: PLC0415
-
-    return run_detection(llm_client, messages)
-
-
 def load_llm() -> LLMClient:
     """Создаёт LLM-клиент при старте приложения."""
     return LLMClient()

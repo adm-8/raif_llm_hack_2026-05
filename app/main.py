@@ -25,10 +25,19 @@ request_store = CheckRequestStore(CHECK_REQUESTS_LOG)
 async def run_lifespan(fastapi_app: FastAPI) -> collections.abc.AsyncIterator[None]:
     fastapi_app.state.llm_client = load_llm()
 
+    from app.models import Conversation, Message  # noqa: PLC0415
     from app.v2.model_loader import load_model as load_v2_model  # noqa: PLC0415
 
     fastapi_app.state.streaming_classifier = load_v2_model()
     app_logger.info("Using V2 classifier (E5+LaBSE)")
+
+    app_logger.info("Warming up classifier...")
+    _warmup_conv = Conversation(
+        session_id="__warmup__",
+        messages=[Message(role="user", content="warmup")],
+    )
+    fastapi_app.state.streaming_classifier.predict(_warmup_conv)
+    app_logger.info("Warmup complete — classifier ready")
 
     fastapi_app.state.request_store = request_store
 
