@@ -44,22 +44,21 @@ COPY --chown=app:app data/requests.json ./data/requests.json
 
 # Создаём директорию HF-кеша и предзагружаем encoder-модели в образ,
 # чтобы первый predict не требовал интернета и не вызывал таймаут.
+# Cache only E5 (LaBSE no longer needed — V3 uses E5-only).
 RUN mkdir -p /app/hf_cache \
     && python -c "\
 from sentence_transformers import SentenceTransformer; \
 SentenceTransformer('intfloat/multilingual-e5-small'); \
-SentenceTransformer('sentence-transformers/LaBSE'); \
 print('HF models cached.')" \
     && chown -R app:app /app/hf_cache
 
-# Если artifacts/e5_labse_model.pkl уже скопирован выше — пропускаем обучение.
-# Иначе обучаем V2-модель прямо при сборке (медленно, ~15 мин, но однократно).
-RUN if [ ! -f /app/artifacts/e5_labse_model.pkl ]; then \
-        echo "e5_labse_model.pkl not found — training V2 model at build time..."; \
-        python -m app.v2.model_loader; \
+# Use pre-trained V3 model if present; otherwise train at build time.
+RUN if [ ! -f /app/artifacts/e5_v3_model.pt ]; then \
+        echo "e5_v3_model.pt not found — training V3 model at build time..."; \
+        python -m app.v3.model_loader; \
         chown -R app:app /app/artifacts; \
     else \
-        echo "e5_labse_model.pkl found — skipping V2 build-time training."; \
+        echo "e5_v3_model.pt found — skipping V3 build-time training."; \
     fi
 
 USER app
