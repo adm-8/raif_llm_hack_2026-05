@@ -7,7 +7,7 @@ import typing
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from app.models import CLEAR_CATEGORY, Conversation, Message
+from app.models import CLEAR_CATEGORY, Conversation, Message, llm_classify
 
 check_router = APIRouter(tags=["Dialogue Check"])
 
@@ -51,7 +51,13 @@ def check_dialogue(
         messages=[Message(role=m.role, content=m.content) for m in request_body.messages],
     )
 
-    category, _confidence = clf.predict(conv)
+    category, confidence = clf.predict(conv)
+
+    if confidence < 0.7:
+        llm_client = http_request.app.state.llm_client
+        llm_category = llm_classify(llm_client, conv)
+        if llm_category is not None:
+            category = llm_category
 
     predicted_red_flags = [] if category == CLEAR_CATEGORY else [RedFlagItem(category=category)]
 

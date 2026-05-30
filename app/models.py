@@ -113,6 +113,37 @@ class LLMClient:
             return None
 
 
+_LLM_PROMPT = """\
+You are a red-flag detector for bank support chat dialogues.
+Classify the dialogue into exactly one of these categories:
+- clear
+- information_extraction
+- transaction_coercion
+- policy_manipulation
+- identity_deception
+- adversarial_attack
+- scope_violation
+
+Dialogue:
+{dialogue}
+
+Reply with JSON only: {{"category": "<category>"}}"""
+
+
+def llm_classify(llm_client: LLMClient, conv: "Conversation") -> str | None:
+    """Ask the LLM to classify a conversation. Returns category string or None on failure."""
+    dialogue = "\n".join(f"{m.role}: {m.content}" for m in conv.messages)
+    result = llm_client.request_completion(_LLM_PROMPT.format(dialogue=dialogue))
+    if not result:
+        return None
+    try:
+        import json  # noqa: PLC0415
+        category = json.loads(result).get("category", "").strip()
+        return category if category in CATEGORIES else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def load_llm() -> LLMClient:
     """Создаёт LLM-клиент при старте приложения."""
     return LLMClient()
