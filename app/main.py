@@ -26,22 +26,15 @@ request_store = CheckRequestStore(CHECK_REQUESTS_LOG)
 async def run_lifespan(fastapi_app: FastAPI) -> collections.abc.AsyncIterator[None]:
     fastapi_app.state.llm_client = load_llm()
 
-    # Try V3 (E5-only, fast) → V2 (E5+LaBSE) → RescueCascade fallback.
+    # Try V2 (E5+LaBSE, high accuracy) → RescueCascade fallback.
     try:
-        from app.v3.model_loader import load_model as load_v3_model  # noqa: PLC0415
+        from app.v2.model_loader import load_model as load_v2_model  # noqa: PLC0415
 
-        fastapi_app.state.streaming_classifier = load_v3_model()
-        app_logger.info("Using V3 classifier (E5-only, no LaBSE)")
+        fastapi_app.state.streaming_classifier = load_v2_model()
+        app_logger.info("Using V2 classifier (E5+LaBSE)")
     except Exception:  # noqa: BLE001
-        app_logger.warning("V3 classifier unavailable — trying V2")
-        try:
-            from app.v2.model_loader import load_model as load_v2_model  # noqa: PLC0415
-
-            fastapi_app.state.streaming_classifier = load_v2_model()
-            app_logger.info("Using V2 classifier (E5+LaBSE)")
-        except Exception:  # noqa: BLE001
-            app_logger.exception("V2 classifier unavailable — falling back to RescueCascade")
-            fastapi_app.state.streaming_classifier = load_model()
+        app_logger.exception("V2 classifier unavailable — falling back to RescueCascade")
+        fastapi_app.state.streaming_classifier = load_model()
 
     fastapi_app.state.request_store = request_store
 
