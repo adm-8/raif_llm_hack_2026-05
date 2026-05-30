@@ -40,7 +40,6 @@ COPY --chown=app:app app ./app
 COPY --chown=app:app artifacts ./artifacts
 # Обучающие данные и реальная разметка.
 COPY --chown=app:app data/train ./data/train
-COPY --chown=app:app data/requests.json ./data/requests.json
 
 # Создаём директорию HF-кеша и предзагружаем encoder-модели в образ,
 # чтобы первый predict не требовал интернета и не вызывал таймаут.
